@@ -500,22 +500,15 @@ transformation."
 
 `s-lex-format' inserts values with (format \"%S\").")
 
-(defun s-lex-fmt|expand (fmt)
-  "Expand FMT into lisp."
-  (list 's-format fmt (quote 'aget)
-        (append '(list)
-                (mapcar
-                 (lambda (matches)
-                   (list
-                    'cons
-                    (cadr matches)
-                    `(format
-                      (if s-lex-value-as-lisp "%S" "%s")
-                      ,(intern (cadr matches)))))
-                 (s-match-strings-all "${\\([^}]+\\)}" fmt)))))
+(defun s--lex-format-parse (format-str)
+  "Return a list of all the symbols interpolated in FORMAT-STRING."
+  (let* ((variable-names
+          (mapcar #'cadr
+                  (s-match-strings-all "${\\(.+?\\)}" format-str))))
+    (mapcar #'intern variable-names)))
 
 (defmacro s-lex-format (format-str)
-  "`s-format` with the current environment.
+  "`s-format` with the currently defined variables.
 
 FORMAT-STR may use the `s-format' variable reference to refer to
 any variable:
@@ -526,7 +519,15 @@ any variable:
 The values of the variables are interpolated with \"%s\" unless
 the variable `s-lex-value-as-lisp' is `t' and then they are
 interpolated with \"%S\"."
-  (s-lex-fmt|expand format-str))
+  (let* ((args (s--lex-format-parse format-str))
+         (raw-format-string
+          (replace-regexp-in-string
+           "${.+?}" "%s" format-str t)))
+    `(format
+      (if s-lex-value-as-lisp
+          (s-replace "%s" "%s" ,raw-format-string)
+        ,raw-format-string)
+      ,@args)))
 
 (provide 's)
 ;;; s.el ends here
